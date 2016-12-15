@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
-using System.Collections;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -10,13 +10,6 @@ public class MainMenu : MonoBehaviour
     // Main Menu
     public RectTransform mainMenu;
     public Dropdown playerCount;
-    public InputField initialTurnTime;
-    public InputField averageTurnTime;
-    public InputField turnMultiplesToMaxIntensity;
-    public InputField minTimeBetweenBeeps;
-    public InputField numOfBeepsTime;
-    public InputField numBeeps;
-    public InputField beepRatio;
 
     public RectTransform playerOptionsMenu;
     public RectTransform playerOptionsList;
@@ -28,6 +21,14 @@ public class MainMenu : MonoBehaviour
 
     public RectTransform colorSelectMenu;
     public RectTransform colorSelectPrefab;
+    
+    public RectTransform gameProfileActiveMenu;
+    public RectTransform gameProfileSelectMenu;
+    public RectTransform gameProfileSelectList;
+    public Text gameProfileActiveName;
+    public Text gameProfileActiveTurnTime;
+    public Text gameProfileActiveMaxTime;
+    public Text gameProfileActiveIntensity;
 
     // Profile Edit Menus
     public Color profileEditColor;
@@ -42,39 +43,41 @@ public class MainMenu : MonoBehaviour
     public RectTransform gameProfilesList;
     public RectTransform gameProfileEditMenu;
     public InputField gameProfileEditName;
-    
+    public InputField gameProfileEditTurnTime;
+    public InputField gameProfileEditMaxTime;
+    public Slider gameProfileEditIntensity;
+    public Text gameProfileTextIntensity;
+
     // Private Vars
-    private ProfileManager profileManager;
-    private List<TimerPlayer> chosenPlayers;
-    private PlayerProfile editPlayerProfile;
-    //private PlayerProfile editGameProfile;
+    private ProfileManager m_profileManager;
+    private List<TimerPlayer> m_chosenPlayers;
+    private GameProfile m_chosenGameProfile;
+    private PlayerProfile m_editPlayerProfile;
+    private GameProfile m_editGameProfile;
 
     
-    public void Awake()
-    {
-        profileManager = new ProfileManager();
-        chosenPlayers = new List<TimerPlayer>();
-    }
-
     public void Start()
     {
+        m_profileManager = new ProfileManager();
+        m_chosenPlayers = new List<TimerPlayer>();
+
         Screen.sleepTimeout = SleepTimeout.SystemSetting;
+        Application.targetFrameRate = 60;
 
-        mainMenu.gameObject.SetActive(true);
-        playerProfileMenu.gameObject.SetActive(false);
-        playerProfileEditMenu.gameObject.SetActive(false);
-        playerOptionsMenu.gameObject.SetActive(true);
-        playerSelectMenu.gameObject.SetActive(false);
-        colorSelectMenu.gameObject.SetActive(false);
-
-        playerCount.value = PlayerPrefs.GetInt("players") - 1;
-        numBeeps.text = "" + PlayerPrefs.GetInt("numBeeps");
-        initialTurnTime.text = "" + PlayerPrefs.GetFloat("initialTurnTime");
-        averageTurnTime.text = "" + PlayerPrefs.GetFloat("averageTurnTime");
-        turnMultiplesToMaxIntensity.text = "" + PlayerPrefs.GetFloat("turnMultiplesToMaxIntensity");
-        minTimeBetweenBeeps.text = "" + PlayerPrefs.GetFloat("minTimeBetweenBeeps");
-        numOfBeepsTime.text = "" + PlayerPrefs.GetFloat("numOfBeepsTime");
-        beepRatio.text = "" + PlayerPrefs.GetFloat("beepRatio");
+        // if we returned from the timer, use the previous settingss
+        // otherwise, use defaults
+        GameObject o = GameObject.FindGameObjectWithTag("Settings");
+        if (o)
+        {
+            Settings settings = o.GetComponent<Settings>();
+            m_chosenPlayers = settings.timerPlayers;
+            m_chosenGameProfile = settings.gameProfile;
+            SetAmmountOfPlayers(m_chosenPlayers.Count);
+        }
+        else
+        {
+            SetAmmountOfPlayers(4);
+        }
 
         PlayerNumChanged();
     }
@@ -87,35 +90,49 @@ public class MainMenu : MonoBehaviour
         return playerCount.value + 1;
     }
 
-    public void PlayerNumChanged()
+    public void SetAmmountOfPlayers(int newPlayerCount)
     {
-        while (chosenPlayers.Count != GetAmountOfPlayers())
+        playerCount.value = newPlayerCount - 1;
+    }
+
+    private void PlayerNumChanged()
+    {
+        while (m_chosenPlayers.Count != GetAmountOfPlayers())
         {
-            if (chosenPlayers.Count > GetAmountOfPlayers())
+            if (m_chosenPlayers.Count > GetAmountOfPlayers())
             {
-                chosenPlayers.RemoveAt(chosenPlayers.Count - 1);
+                m_chosenPlayers.RemoveAt(m_chosenPlayers.Count - 1);
             }
             else
             {
-                chosenPlayers.Add(new TimerPlayer(GetUnusedGuestName(), GetUnusedColor()));
+                m_chosenPlayers.Add(new TimerPlayer(GetUnusedGuestName(), GetUnusedColor()));
             }
         }
 
-        UpdateChoosenPlayerList();
+        UpdateMainMenu();
     }
 
-    private void UpdateChoosenPlayerList()
+    private void UpdateMainMenu()
     {
+        // hide unneccessary menus
+        mainMenu.gameObject.SetActive(true);
         playerOptionsMenu.gameObject.SetActive(true);
         playerSelectMenu.gameObject.SetActive(false);
         colorSelectMenu.gameObject.SetActive(false);
+        gameProfileActiveMenu.gameObject.SetActive(true);
+        gameProfileSelectMenu.gameObject.SetActive(false);
+        playerProfileMenu.gameObject.SetActive(false);
+        playerProfileEditMenu.gameObject.SetActive(false);
+        gameProfileMenu.gameObject.SetActive(false);
+        gameProfileEditMenu.gameObject.SetActive(false);
 
+        // update player list
         foreach (RectTransform t in playerOptionsList)
         {
             Destroy(t.gameObject);
         }
 
-        foreach (TimerPlayer player in chosenPlayers)
+        foreach (TimerPlayer player in m_chosenPlayers)
         {
             RectTransform t = Instantiate(playerOptionPrefab);
             t.SetParent(playerOptionsList, false);
@@ -129,44 +146,58 @@ public class MainMenu : MonoBehaviour
             nameOptions.onClick.AddListener(() => { ChoosePlayer(tempPlayer); });
             colorOptions.onClick.AddListener(() => { ChooseColor(tempPlayer); });
         }
-    }
-
-    private string GetUnusedGuestName(string currentName = null)
-    {
-        string guestName = null;
-        bool unusedNameFound = false;
-
-        for (int guestNumber = 1; !unusedNameFound; guestNumber++)
-        {   
-            guestName = "Guest " + guestNumber;
-            if (!chosenPlayers.Any((player) => { return (player.IsGuest() && player.Name == guestName && guestName != currentName); }))
-            {
-                unusedNameFound = true;
-            }
+        
+        // ensure that there is always a game profile active
+        if (m_profileManager.GetGameProfiles().Count == 0)
+        {
+            m_profileManager.AddGameProfile("Default", 30, 60, 0.5f);
         }
-        return guestName;
+
+        if (m_chosenGameProfile == null)
+        {
+            m_chosenGameProfile = m_profileManager.GetGameProfiles().First();
+        }
+
+        // update selected game profile information
+        gameProfileActiveName.text = m_chosenGameProfile.Name;
+        TimeSpan turnTime = TimeSpan.FromSeconds(m_chosenGameProfile.TurnTime);
+        TimeSpan maxTime = TimeSpan.FromSeconds(m_chosenGameProfile.MaxTime);
+        gameProfileActiveTurnTime.text = string.Format("{0:D1}:{1:D2}", turnTime.Minutes, turnTime.Seconds);
+        gameProfileActiveMaxTime.text = string.Format("{0:D1}:{1:D2}", maxTime.Minutes, maxTime.Seconds);
+        gameProfileActiveIntensity.text = (int)(100 * m_chosenGameProfile.Intensity) + "%";
     }
 
-    private Color GetUnusedColor()
+    private string GetUnusedGuestName(string ignoreName = null)
+    {
+        int guestNumber = 0;
+        while (true)
+        {
+            string guestName = "Guest " + guestNumber;
+            if (!m_chosenPlayers.Any((player) => { return (player.IsGuest() && player.Name == guestName && guestName != ignoreName); }))
+            {
+                return guestName;
+            }
+            guestNumber++;
+        }
+    }
+
+    private List<Color> GetUnusedColors()
     {
         List<Color> avaliableColors = playerColors.ToList();
-
-        foreach (TimerPlayer player in chosenPlayers)
+        foreach (TimerPlayer player in m_chosenPlayers)
         {
             if (avaliableColors.Contains(player.Color))
             {
                 avaliableColors.Remove(player.Color);
             }
         }
+        return avaliableColors;
+    }
 
-        if (avaliableColors.Count > 0)
-        {
-            return avaliableColors[0];
-        }
-        else
-        {
-            return playerColors[0];
-        }
+    private Color GetUnusedColor()
+    {
+        List<Color> avaliableColors = GetUnusedColors();
+        return avaliableColors.Count > 0 ? avaliableColors[UnityEngine.Random.Range(0, avaliableColors.Count)] : playerColors[0];
     }
 
     private void ChooseColor(TimerPlayer player)
@@ -185,7 +216,7 @@ public class MainMenu : MonoBehaviour
             RectTransform t = Instantiate(colorSelectPrefab);
             t.SetParent(colorSelectMenu, false);
             t.GetComponent<Image>().color = tempColor;
-            t.GetComponent<Button>().onClick.AddListener(() => { UpdateTimePlayer(player, tempColor); UpdateChoosenPlayerList(); });
+            t.GetComponent<Button>().onClick.AddListener(() => { UpdateTimePlayer(player, tempColor); UpdateMainMenu(); });
         }
     }
 
@@ -199,26 +230,26 @@ public class MainMenu : MonoBehaviour
             Destroy(t.gameObject);
         }
 
-        foreach (PlayerProfile playerProfile in profileManager.GetPlayerProfiles())
+        foreach (PlayerProfile playerProfile in m_profileManager.GetPlayerProfiles())
         {
             PlayerProfile tempPlayerProfile = playerProfile;
-            Button button = AddPlayerButton(profilePrefab, tempPlayerProfile.Name, playerSelectPanel);
-            button.onClick.AddListener(() => { UpdateTimePlayer(player, tempPlayerProfile); UpdateChoosenPlayerList(); });
+            Button button = AddProfileButton(profilePrefab, tempPlayerProfile.Name, playerSelectPanel);
+            button.onClick.AddListener(() => { UpdateTimePlayer(player, tempPlayerProfile); UpdateMainMenu(); });
         }
         
-        Button guestButton = AddPlayerButton(profilePrefab, "Use guest player", playerSelectPanel);
-        guestButton.GetComponentInChildren<Image>().color = new Color(109.0f / 255, 75.0f / 255, 49.0f / 255);
-        guestButton.onClick.AddListener(() => { UpdateTimePlayer(player, GetUnusedGuestName(player.Name)); UpdateChoosenPlayerList(); });
+        Button guestButton = AddProfileButton(profilePrefab, "Use Guest", playerSelectPanel);
+        guestButton.GetComponentInChildren<Image>().color = new Color(109f / 255, 75f / 255, 49f / 255);
+        guestButton.onClick.AddListener(() => { UpdateTimePlayer(player, GetUnusedGuestName(player.Name)); UpdateMainMenu(); });
     }
     
     private void UpdateTimePlayer(TimerPlayer oldPlayer, PlayerProfile profile)
     {
-        chosenPlayers[chosenPlayers.IndexOf(oldPlayer)] = new TimerPlayer(profile, oldPlayer.Color);
+        m_chosenPlayers[m_chosenPlayers.IndexOf(oldPlayer)] = new TimerPlayer(profile, oldPlayer.Color);
     }
 
     private void UpdateTimePlayer(TimerPlayer oldPlayer, string name)
     {
-        chosenPlayers[chosenPlayers.IndexOf(oldPlayer)] = new TimerPlayer(name, oldPlayer.Color);
+        m_chosenPlayers[m_chosenPlayers.IndexOf(oldPlayer)] = new TimerPlayer(name, oldPlayer.Color);
     }
 
     private void UpdateTimePlayer(TimerPlayer oldPlayer, Color color)
@@ -234,10 +265,28 @@ public class MainMenu : MonoBehaviour
             newPlayer = new TimerPlayer(oldPlayer.Profile, color);
         }
 
-        chosenPlayers[chosenPlayers.IndexOf(oldPlayer)] = newPlayer;
+        m_chosenPlayers[m_chosenPlayers.IndexOf(oldPlayer)] = newPlayer;
     }
 
-    private Button AddPlayerButton(RectTransform prefab, string name, RectTransform parent)
+    public void SelectGameProfile()
+    {
+        gameProfileActiveMenu.gameObject.SetActive(false);
+        gameProfileSelectMenu.gameObject.SetActive(true);
+
+        foreach (RectTransform t in gameProfileSelectList)
+        {
+            Destroy(t.gameObject);
+        }
+
+        foreach (GameProfile gameProfile in m_profileManager.GetGameProfiles())
+        {
+            GameProfile tempGameProfile = gameProfile;
+            Button button = AddProfileButton(profilePrefab, tempGameProfile.Name, gameProfileSelectList);
+            button.onClick.AddListener(() => { m_chosenGameProfile = tempGameProfile; UpdateMainMenu(); });
+        }
+    }
+
+    private Button AddProfileButton(RectTransform prefab, string name, RectTransform parent)
     {
         RectTransform t = Instantiate(prefab);
         t.SetParent(parent, false);
@@ -250,53 +299,43 @@ public class MainMenu : MonoBehaviour
     {
         mainMenu.gameObject.SetActive(false);
         playerProfileMenu.gameObject.SetActive(true);
-        playerProfileEditMenu.gameObject.SetActive(false);
 
-        editPlayerProfile = null;
+        m_editPlayerProfile = null;
 
-        UpdatePlayerList();
-        UpdateChoosenPlayerList();
+        UpdatePlayerProfileList();
     }
 
     public void ToGameProfileMenu()
     {
         mainMenu.gameObject.SetActive(false);
         gameProfileMenu.gameObject.SetActive(true);
-        gameProfileEditMenu.gameObject.SetActive(false);
 
-        editPlayerProfile = null;
+        m_editGameProfile = null;
 
-        UpdatePlayerList();
-        UpdateChoosenPlayerList();
+        UpdateGameProfileList();
     }
 
     public void StartTimer()
     {
-        PlayerPrefs.SetInt("players", GetAmountOfPlayers());
-        PlayerPrefs.SetInt("numBeeps", int.Parse(numBeeps.text));
-        PlayerPrefs.SetFloat("initialTurnTime", float.Parse(initialTurnTime.text));
-        PlayerPrefs.SetFloat("averageTurnTime", float.Parse(averageTurnTime.text));
-        PlayerPrefs.SetFloat("turnMultiplesToMaxIntensity", float.Parse(turnMultiplesToMaxIntensity.text));
-        PlayerPrefs.SetFloat("minTimeBetweenBeeps", float.Parse(minTimeBetweenBeeps.text));
-        PlayerPrefs.SetFloat("numOfBeepsTime", float.Parse(numOfBeepsTime.text));
-        PlayerPrefs.SetFloat("beepRatio", float.Parse(beepRatio.text));
-
         Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
-        GameObject persist = Instantiate(new GameObject());
-        Object.DontDestroyOnLoad(persist);
-        persist.tag = "Settings";
-        Settings settings = persist.AddComponent<Settings>();
-
-        settings.numOfPlayers                   = GetAmountOfPlayers();
-        settings.numBeeps                       = int.Parse(numBeeps.text);
-        settings.intialTurnTimer                = float.Parse(initialTurnTime.text);
-        settings.averageTurnTime                = float.Parse(averageTurnTime.text);
-        settings.turnMultiplesToMaxIntensity    = float.Parse(turnMultiplesToMaxIntensity.text);
-        settings.minTimeBetweenBeeps            = float.Parse(minTimeBetweenBeeps.text);
-        settings.numOfBeepsTime                 = float.Parse(numOfBeepsTime.text);
-        settings.beepRatio                      = float.Parse(beepRatio.text);
-        settings.timerPlayers                   = chosenPlayers;
+        // Settings object will exist if returing from timer scene
+        GameObject o = GameObject.FindGameObjectWithTag("Settings");
+        Settings settings;
+        if (!o)
+        {
+            GameObject persist = Instantiate(new GameObject());
+            DontDestroyOnLoad(persist);
+            persist.tag = "Settings";
+            settings = persist.AddComponent<Settings>();
+        }
+        else
+        {
+            settings = o.GetComponent<Settings>();
+        }
+        
+        settings.timerPlayers = m_chosenPlayers;
+        settings.gameProfile = m_chosenGameProfile;
 
         SceneManager.LoadScene(1);
     }
@@ -304,7 +343,7 @@ public class MainMenu : MonoBehaviour
 
     //---------- EDIT PLAYER PROFILE MENU ------------------------------
     
-    public void UpdatePlayerList()
+    public void UpdatePlayerProfileList()
     {
         foreach (RectTransform t in playerProfilesList)
         {
@@ -314,69 +353,160 @@ public class MainMenu : MonoBehaviour
             }
         }
 
-        foreach (PlayerProfile player in profileManager.GetPlayerProfiles())
+        foreach (PlayerProfile profile in m_profileManager.GetPlayerProfiles())
         {
             RectTransform t = Instantiate(profilePrefab);
             t.SetParent(playerProfilesList, false);
             t.SetSiblingIndex(1);
-            t.GetComponentInChildren<Text>().text = player.Name;
+            t.GetComponentInChildren<Text>().text = profile.Name;
 
-            if (player == editPlayerProfile)
+            if (profile == m_editPlayerProfile)
             {
                 t.GetComponent<Image>().color = profileEditColor;
             }
 
-            PlayerProfile tempPlayerProfile = player;
-            t.GetComponent<Button>().onClick.AddListener(() => { editPlayerProfile = tempPlayerProfile; UpdatePlayerList(); });
+            PlayerProfile tempPlayerProfile = profile;
+            t.GetComponent<Button>().onClick.AddListener(() => { m_editPlayerProfile = tempPlayerProfile; UpdatePlayerProfileList(); });
         }
         
-        if (editPlayerProfile != null)
+        if (m_editPlayerProfile != null)
         {
-            playerProfileEditName.text = editPlayerProfile.Name;
+            playerProfileEditName.text = m_editPlayerProfile.Name;
             playerProfileEditMenu.gameObject.SetActive(true);
         }
         else
         {
             playerProfileEditMenu.gameObject.SetActive(false);
         }
-
-        profileManager.Save();
     }
 
     public void AddPlayerProfile()
     {
-        string newPlayer = "Unnamed Player";
-        editPlayerProfile = profileManager.AddPlayerProfile(newPlayer);
-        UpdatePlayerList();
+        string profileName = "Unnamed Player";
+        m_editPlayerProfile = m_profileManager.AddPlayerProfile(profileName);
+        UpdatePlayerProfileList();
     }
 
     public void RemovePlayerProfile()
     {
-        if (editPlayerProfile != null)
+        if (m_editPlayerProfile != null)
         {
-            profileManager.RemovePlayerProfile(editPlayerProfile);
-            editPlayerProfile = null;
-            UpdatePlayerList();
+            m_profileManager.RemovePlayerProfile(m_editPlayerProfile);
+            foreach (TimerPlayer player in m_chosenPlayers)
+            {
+                if (player.Profile == m_editPlayerProfile)
+                {
+                    UpdateTimePlayer(player, GetUnusedGuestName());
+                }
+            }
+            m_editPlayerProfile = null;
+            UpdatePlayerProfileList();
         }
     }
 
-    public void PlayerSettingsChanged()
+    public void PlayerProfileChanged()
     {
-        if (editPlayerProfile != null)
+        if (m_editPlayerProfile != null)
         {
-            editPlayerProfile.Name = playerProfileEditName.text;
-            UpdatePlayerList();
+            m_editPlayerProfile.Name = playerProfileEditName.text;
+            m_editPlayerProfile = null;
+            UpdatePlayerProfileList();
         }
-    }
-
-    public void ToMainMenu()
-    {
-        mainMenu.gameObject.SetActive(true);
-        playerProfileMenu.gameObject.SetActive(false);
-        playerProfileEditMenu.gameObject.SetActive(false);
     }
 
 
     //---------- EDIT GAME PROFILE MENU ------------------------------
 
+    public void UpdateGameProfileList()
+    {
+        foreach (RectTransform t in gameProfilesList)
+        {
+            if (t.GetSiblingIndex() != 0)
+            {
+                Destroy(t.gameObject);
+            }
+        }
+
+        foreach (GameProfile profile in m_profileManager.GetGameProfiles())
+        {
+            RectTransform t = Instantiate(profilePrefab);
+            t.SetParent(gameProfilesList, false);
+            t.SetSiblingIndex(1);
+            t.GetComponentInChildren<Text>().text = profile.Name;
+
+            if (profile == m_editGameProfile)
+            {
+                t.GetComponent<Image>().color = profileEditColor;
+            }
+
+            GameProfile tempGameProfile = profile;
+            t.GetComponent<Button>().onClick.AddListener(() => { m_editGameProfile = tempGameProfile; UpdateGameProfileList(); });
+        }
+
+        if (m_editGameProfile != null)
+        {
+            gameProfileEditName.text = m_editGameProfile.Name;
+            gameProfileEditTurnTime.text = m_editGameProfile.TurnTime.ToString();
+            gameProfileEditMaxTime.text = m_editGameProfile.MaxTime.ToString();
+            gameProfileEditIntensity.value = m_editGameProfile.Intensity;
+            gameProfileEditMenu.gameObject.SetActive(true);
+        }
+        else
+        {
+            gameProfileEditMenu.gameObject.SetActive(false);
+        }
+    }
+
+    public void AddGameProfile()
+    {
+        string profileName = "New Profile";
+        m_editGameProfile = m_profileManager.AddGameProfile(profileName, 30, 60, 0.5f);
+        UpdateGameProfileList();
+    }
+
+    public void RemoveGameProfile()
+    {
+        if (m_editGameProfile != null)
+        {
+            m_profileManager.RemoveGameProfile(m_editGameProfile);
+            if (m_chosenGameProfile == m_editGameProfile)
+            {
+                m_chosenGameProfile = null;
+            }
+            m_editGameProfile = null;
+            UpdateGameProfileList();
+        }
+    }
+
+    public void GameProfileSlidersChanged()
+    {
+        gameProfileTextIntensity.text = "Overtime Intensity: " + (int)(100 * gameProfileEditIntensity.value) + "%";
+    }
+
+    public void GameProfileChanged()
+    {
+        if (m_editGameProfile != null)
+        {
+            m_editGameProfile.Name = gameProfileEditName.text;
+            if (!string.IsNullOrEmpty(gameProfileEditTurnTime.text))
+            {
+                m_editGameProfile.TurnTime = int.Parse(gameProfileEditTurnTime.text);
+            }
+            if (!string.IsNullOrEmpty(gameProfileEditMaxTime.text))
+            {
+                m_editGameProfile.MaxTime = int.Parse(gameProfileEditMaxTime.text);
+            }
+            m_editGameProfile.Intensity = gameProfileEditIntensity.value;
+            m_editGameProfile = null;
+            UpdateGameProfileList();
+        }
+    }
+
+    public void ToMainMenu()
+    {
+        m_profileManager.Save();
+        PlayerProfileChanged();
+        GameProfileChanged();
+        UpdateMainMenu();
+    }
 }

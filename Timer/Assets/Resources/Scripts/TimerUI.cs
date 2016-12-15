@@ -3,7 +3,7 @@ using System;
 
 public class TimerUI : MonoBehaviour
 {
-    public float minSwipeSpeed = 40.0f;
+    public float minSwipeSpeed = 27.5f;
 
     public event EventHandler<SwipeArgs> SwipeEvent;
     
@@ -11,9 +11,6 @@ public class TimerUI : MonoBehaviour
     {
         foreach (Touch touch in Input.touches)
         {
-            if (touch.phase == TouchPhase.Began)
-            {
-            }
             if (touch.phase == TouchPhase.Moved)
             {
                 Vector2 swipeDelta = touch.deltaPosition;
